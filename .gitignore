@@ -1,3 +1,4 @@
 /node_modules
 /dist
 high_scores.json
+game_save.json
