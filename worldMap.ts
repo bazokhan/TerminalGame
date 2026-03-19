@@ -240,41 +240,57 @@ export class WorldMap {
   }
   
   // Move the player
-  public movePlayer(dx: number, dy: number): string {
+  public movePlayer(dx: number, dy: number): { moved: boolean; message: string; tileType?: TileType } {
     const newX = this.player.x + dx;
     const newY = this.player.y + dy;
-    
+
     // Check if the new position is within bounds
     if (
-      newX < 0 || 
-      newX >= this.width || 
-      newY < 0 || 
+      newX < 0 ||
+      newX >= this.width ||
+      newY < 0 ||
       newY >= this.height
     ) {
-      return "You can't move that way.";
+      return { moved: false, message: "You can't move that way." };
     }
-    
+
     // Check if the tile is walkable
     if (!this.map[newY][newX].walkable) {
-      return `You can't walk there: ${this.map[newY][newX].description}`;
+      return {
+        moved: false,
+        message: `You can't walk there: ${this.map[newY][newX].description}`,
+      };
     }
-    
-    // Check for entity at the destination
+
+    // Check for entity at the destination (Merchant allows entry = shop)
     if (this.map[newY][newX].entity) {
       const entity = this.map[newY][newX].entity!;
-      return this.handleEntityInteraction(entity);
+      if (entity.type === EntityType.MERCHANT) {
+        this.player.x = newX;
+        this.player.y = newY;
+        this.discoverSurroundingTiles(newX, newY, 2);
+        return {
+          moved: true,
+          message: this.handleEntityInteraction(entity),
+          tileType: TileType.MERCHANT,
+        };
+      }
+      return {
+        moved: false,
+        message: this.handleEntityInteraction(entity),
+      };
     }
-    
+
     // Move player
     this.player.x = newX;
     this.player.y = newY;
-    
+
     // Discover surrounding tiles
     this.discoverSurroundingTiles(newX, newY, 2);
-    
-    // Generate description based on tile type
+
+    const tile = this.map[newY][newX];
     let message = "";
-    switch (this.map[newY][newX].type) {
+    switch (tile.type) {
       case TileType.TOWN:
         message = "You've entered a town. There are shops and inns here.";
         break;
@@ -282,10 +298,10 @@ export class WorldMap {
         message = "You're at the entrance to a dark dungeon.";
         break;
       default:
-        message = `You move to ${this.map[newY][newX].description}`;
+        message = `You move to ${tile.description}`;
     }
-    
-    return message;
+
+    return { moved: true, message, tileType: tile.type };
   }
   
   // Handle interaction with entities
@@ -412,41 +428,40 @@ export class WorldMap {
 
 // Helper function to handle keyboard input for movement
 export function handleMovementInput(
-  key: string, 
+  key: string,
   worldMap: WorldMap
-): { message: string, moved: boolean } {
+): { message: string; moved: boolean; tileType?: TileType } {
   let dx = 0;
   let dy = 0;
-  let moved = false;
-  
+
   switch (key.toLowerCase()) {
-    case 'w':
-    case 'arrowup':
+    case "w":
+    case "arrowup":
       dy = -1;
-      moved = true;
       break;
-    case 's':
-    case 'arrowdown':
+    case "s":
+    case "arrowdown":
       dy = 1;
-      moved = true;
       break;
-    case 'a':
-    case 'arrowleft':
+    case "a":
+    case "arrowleft":
       dx = -1;
-      moved = true;
       break;
-    case 'd':
-    case 'arrowright':
+    case "d":
+    case "arrowright":
       dx = 1;
-      moved = true;
       break;
   }
-  
-  if (moved) {
-    const message = worldMap.movePlayer(dx, dy);
-    return { message, moved };
+
+  if (dx !== 0 || dy !== 0) {
+    const result = worldMap.movePlayer(dx, dy);
+    return {
+      message: result.message,
+      moved: result.moved,
+      tileType: result.tileType,
+    };
   }
-  
+
   return { message: "Invalid movement key.", moved: false };
 }
 

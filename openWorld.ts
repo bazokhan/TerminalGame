@@ -1,9 +1,15 @@
 #!/usr/bin/env ts-node
 
-import * as readline from 'readline';
-import * as fs from 'fs';
-import * as path from 'path';
-import { WorldMap, TileType, handleMovementInput, displayMapLegend } from './worldMap';
+import * as readline from "readline";
+import * as fs from "fs";
+import * as path from "path";
+import { WorldMap, TileType, handleMovementInput, displayMapLegend } from "./worldMap";
+import {
+  CombatEnemy,
+  runCombatReadline,
+  ENEMIES,
+  type ICombatPlayer,
+} from "./combat";
 
 // Terminal colors
 const COLORS = {
@@ -86,8 +92,8 @@ interface PlayerSaveData {
   inventory: string[];
 }
 
-// Player class for the open world version
-class Player {
+// Player class for the open world version (implements ICombatPlayer for combat)
+class Player implements ICombatPlayer {
   hp: number;
   maxHp: number;
   atk: number;
@@ -101,7 +107,8 @@ class Player {
   exp = 0;
   expToNextLevel = 100;
   inventory: string[] = [];
-  
+  status = { poisoned: 0, cursed: 0, atkModifier: 0 };
+
   constructor(characterClass: CharacterClass) {
     this.characterClass = characterClass;
     this.maxHp = characterClass.baseHp;
@@ -115,19 +122,74 @@ class Player {
     }
   }
   
-  heal(amount: number): number {
+  restoreHp(amount: number): number {
     const oldHp = this.hp;
     this.hp = Math.min(this.hp + amount, this.maxHp);
     return this.hp - oldHp;
   }
-  
+
   usePotion(): boolean {
     if (this.potions > 0) {
-      this.heal(5);
+      this.restoreHp(5);
       this.potions--;
       return true;
     }
     return false;
+  }
+
+  getEffectiveAttack(): number {
+    return Math.max(1, this.atk + this.status.atkModifier);
+  }
+
+  applyStatusEffects(): string[] {
+    const messages: string[] = [];
+    if (this.status.poisoned > 0) {
+      this.hp -= 1;
+      this.status.poisoned--;
+      messages.push(`You take 1 damage from poison. (${this.status.poisoned} turns left)`);
+    }
+    if (this.status.cursed > 0) {
+      this.status.cursed--;
+      if (this.status.cursed === 0) {
+        this.status.atkModifier = 0;
+        messages.push("The curse has worn off.");
+      } else {
+        messages.push(`Cursed! ATK reduced. (${this.status.cursed} turns left)`);
+      }
+    }
+    return messages;
+  }
+
+  attack(enemy: CombatEnemy): { damage: number; isCritical: boolean } {
+    const isCritical = Math.random() < this.characterClass.criticalChance;
+    let damage = Math.max(this.getEffectiveAttack() - enemy.def, 1);
+    if (
+      this.characterClass.name === "Mage" &&
+      this.mana > 0 &&
+      Math.random() < 0.7
+    ) {
+      damage = this.characterClass.magicPower;
+      this.mana--;
+    }
+    if (isCritical) damage = Math.floor(damage * 1.5);
+    enemy.hp -= damage;
+    return { damage, isCritical };
+  }
+
+  dodge(): boolean {
+    return Math.random() < this.characterClass.dodgeChance;
+  }
+
+  block(): boolean {
+    return this.characterClass.name === "Warrior" && Math.random() < 0.25;
+  }
+
+  heal(): boolean {
+    return this.usePotion();
+  }
+
+  dealDamage(amount: number): void {
+    this.hp = Math.max(0, this.hp - amount);
   }
   
   gainExp(amount: number): boolean {
@@ -299,32 +361,38 @@ function displayExplorationMode(): void {
 }
 
 // Handle exploration mode input
-function handleExplorationInput(input: string): void {
+async function handleExplorationInput(input: string): Promise<void> {
   const key = input.toLowerCase();
-  
+
   switch (key) {
-    case 'w':
-    case 'a':
-    case 's':
-    case 'd':
-    case 'arrowup':
-    case 'arrowdown':
-    case 'arrowleft':
-    case 'arrowright':
-      // Handle movement
+    case "w":
+    case "a":
+    case "s":
+    case "d":
+    case "arrowup":
+    case "arrowdown":
+    case "arrowleft":
+    case "arrowright": {
       const result = handleMovementInput(key, gameState.worldMap);
       if (result.moved) {
         gameState.message = result.message;
         gameState.turns++;
-        
-        // Random encounter check (10% chance per move)
-        if (Math.random() < 0.1) {
-          triggerRandomEncounter();
+
+        if (
+          result.tileType === TileType.TOWN ||
+          result.tileType === TileType.MERCHANT
+        ) {
+          await runTownShop();
+        } else if (result.tileType === TileType.DUNGEON) {
+          await runMiniDungeon();
+        } else if (Math.random() < 0.1) {
+          await triggerRandomEncounter();
         }
       } else {
         gameState.message = result.message;
       }
       break;
+    }
     case 'i':
       // Show inventory
       if (gameState.player.inventory.length === 0) {
@@ -369,26 +437,134 @@ function handleExplorationInput(input: string): void {
     default:
       gameState.message = "Unknown command. Press H for help.";
   }
-  
-  // Continue the game loop
+
   gameLoop();
 }
 
-// Trigger a random encounter
-function triggerRandomEncounter(): void {
+function question(prompt: string): Promise<string> {
+  return new Promise((resolve) => {
+    rl.question(prompt, (answer) => resolve(answer));
+  });
+}
+
+async function runTownShop(): Promise<void> {
+  const prices = { potion: 10, atk: 25, def: 25 };
+  clearScreen();
+  console.log(`${COLORS.cyan}=== TOWN SHOP ===${COLORS.reset}\n`);
+  console.log(`Gold: ${gameState.player.gold}\n`);
+  console.log(`[1] Health Potion - ${prices.potion} gold`);
+  console.log(`[2] Sharpening Stone (+1 ATK) - ${prices.atk} gold`);
+  console.log(`[3] Leather Padding (+1 DEF) - ${prices.def} gold`);
+  console.log(`[4] Leave shop\n`);
+
+  const choice = await question("Your choice [1-4]: ");
+  if (choice === "1" && gameState.player.gold >= prices.potion) {
+    gameState.player.gold -= prices.potion;
+    gameState.player.potions++;
+    gameState.message = "You bought a health potion.";
+  } else if (choice === "2" && gameState.player.gold >= prices.atk) {
+    gameState.player.gold -= prices.atk;
+    gameState.player.atk++;
+    gameState.message = "You bought a sharpening stone. ATK +1";
+  } else if (choice === "3" && gameState.player.gold >= prices.def) {
+    gameState.player.gold -= prices.def;
+    gameState.player.def++;
+    gameState.message = "You bought leather padding. DEF +1";
+  } else if (choice !== "4") {
+    gameState.message = "Not enough gold or invalid choice.";
+  }
+}
+
+async function runMiniDungeon(): Promise<void> {
+  clearScreen();
+  console.log(
+    `${COLORS.red}You enter the dungeon...${COLORS.reset}\n`
+  );
+
+  const difficulty = { enemyBonus: Math.floor(gameState.player.level / 2) };
+  const rooms = 2 + Math.floor(Math.random() * 2);
+
+  for (let r = 0; r < rooms; r++) {
+    if (gameState.player.hp <= 0) break;
+
+    const roomType = Math.random();
+    if (roomType < 0.6) {
+      const enemyName = ENEMIES[Math.floor(Math.random() * ENEMIES.length)];
+      const levelScaling = gameState.player.level * 0.5;
+      const enemy = new CombatEnemy(enemyName, difficulty, levelScaling);
+      console.log(`\n${COLORS.red}Room ${r + 1}: A ${enemy.name} blocks your path!${COLORS.reset}\n`);
+      const { victory } = await runCombatReadline(
+        gameState.player,
+        enemy,
+        rl,
+        difficulty
+      );
+      if (!victory) {
+        if (gameState.player.hp <= 0) {
+          console.log(`\n${COLORS.red}You have fallen in the dungeon...${COLORS.reset}`);
+          process.exit(0);
+        }
+        gameState.message = "You fled the dungeon.";
+        return;
+      }
+      const gold = Math.floor(Math.random() * 20) + 10;
+      gameState.player.gold += gold;
+      gameState.player.gainExp(Math.floor(Math.random() * 30) + 15);
+      console.log(`\n${COLORS.green}+${gold} gold!${COLORS.reset}`);
+    } else {
+      const gold = Math.floor(Math.random() * 15) + 5;
+      gameState.player.gold += gold;
+      gameState.player.potions += 1;
+      console.log(
+        `\n${COLORS.yellow}Room ${r + 1}: You found treasure! +${gold} gold, +1 potion${COLORS.reset}`
+      );
+    }
+  }
+
+  gameState.message = "You conquered the dungeon and returned to the overworld!";
+}
+
+// Trigger a random encounter (async for combat)
+async function triggerRandomEncounter(): Promise<void> {
   const encounterType = Math.random();
-  
+
   if (encounterType < 0.6) {
-    // Enemy encounter (will be implemented later)
-    gameState.message = "You encountered an enemy! (Combat not yet implemented)";
+    const enemyName = ENEMIES[Math.floor(Math.random() * ENEMIES.length)];
+    const levelScaling = (gameState.player.level - 1) * 0.5;
+    const difficulty = { enemyBonus: Math.floor(gameState.player.level / 2) };
+    const enemy = new CombatEnemy(enemyName, difficulty, levelScaling);
+
+    console.log(
+      `\n${COLORS.red}A wild ${enemy.name} appears!${COLORS.reset} Prepare for battle!\n`
+    );
+
+    const { victory } = await runCombatReadline(
+      gameState.player,
+      enemy,
+      rl,
+      difficulty
+    );
+
+    if (victory) {
+      const gold = Math.floor(Math.random() * 15) + 5;
+      const exp = Math.floor(Math.random() * 20) + 10;
+      gameState.player.gold += gold;
+      gameState.player.score += gold;
+      gameState.player.gainExp(exp);
+      gameState.message = `You defeated the ${enemy.name}! +${gold} gold, +${exp} exp`;
+    } else {
+      if (gameState.player.hp <= 0) {
+        console.log(`\n${COLORS.red}You have fallen...${COLORS.reset}`);
+        process.exit(0);
+      }
+      gameState.message = "You fled from the enemy.";
+    }
   } else if (encounterType < 0.8) {
-    // Find treasure
     const gold = Math.floor(Math.random() * 10) + 1;
     gameState.player.gold += gold;
     gameState.player.score += gold;
     gameState.message = `You found a small treasure chest with ${gold} gold!`;
   } else {
-    // Find a potion
     gameState.player.potions += 1;
     gameState.message = "You found a health potion!";
   }
@@ -471,7 +647,7 @@ function gameLoop(): void {
     case 'explore':
       displayExplorationMode();
       rl.question("Your action: ", (input) => {
-        handleExplorationInput(input);
+        void handleExplorationInput(input);
       });
       break;
     // Other game modes (combat, town, etc.) will be implemented later

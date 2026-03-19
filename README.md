@@ -23,7 +23,12 @@ The original readline-based dungeon crawler.
 
 ### Open World (`npm run open-world`)
 
-Grid-based ASCII world with free movement, towns, dungeons, merchants. Combat and town/shop interactions are planned.
+Grid-based ASCII world with free movement:
+
+- Combat on random encounters (10% per move)
+- Gold and EXP rewards on victory
+- Town and merchant shops (buy potions, +ATK, +DEF)
+- Mini-dungeon (2–3 rooms: combat and treasure)
 
 ## How to Play
 
@@ -64,9 +69,6 @@ Grid-based ASCII world with free movement, towns, dungeons, merchants. Combat an
 
 ## Planned
 
-- Open World combat
-- Town/shop interactions
-- Dungeon entrance (mini-dungeon)
-- Combat animations
+- Combat animations (flash on hit)
 
 Enjoy your adventure!
