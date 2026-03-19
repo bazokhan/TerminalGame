@@ -151,6 +151,14 @@ export function appendLog(layout: GameLayout, line: string): void {
   layout.log.log(line);
 }
 
-export function setStats(layout: GameLayout, content: string): void {
-  layout.stats.setContent(content);
+export function setStats(
+  layout: GameLayout,
+  content: string,
+  enemyStats?: string
+): void {
+  const full =
+    enemyStats !== undefined
+      ? content + "\n\n{red-fg}═══════════════\n" + enemyStats + "{/}"
+      : content;
+  layout.stats.setContent(full);
 }

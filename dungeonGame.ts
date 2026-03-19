@@ -192,6 +192,18 @@ function formatStatus(player: Player, level: number, rooms: number, maxRooms: nu
     .join("\n");
 }
 
+function formatEnemyStats(enemy: Enemy): string {
+  const hpPct = Math.min(enemy.hp / enemy.maxHp, 1);
+  const hpBar =
+    "█".repeat(Math.floor(hpPct * 10)) +
+    "░".repeat(10 - Math.floor(hpPct * 10));
+  return [
+    `ENEMY: ${enemy.name}`,
+    `HP: [${hpBar}] ${enemy.hp}/${enemy.maxHp}`,
+    `ATK: ${enemy.atk}  DEF: ${enemy.def}`,
+  ].join("\n");
+}
+
 interface LoadedState {
   player: Player;
   currentLevel: number;
@@ -324,29 +336,88 @@ export async function runDungeon(
       const enemy = new Enemy(enemyName, difficulty, levelScaling);
       const meta = ENEMY_TYPES[enemyName];
 
-      let content = `A ${enemy.name} appears! (HP: ${enemy.hp}, ATK: ${enemy.atk}, DEF: ${enemy.def})\n\n`;
-      if (meta?.description) content += `${meta.description}\n`;
-      if (meta?.ability) content += `Ability: ${meta.ability}\n\n`;
-      content += "What will you do? [A]ttack [D]odge [P]otion";
-      if (player.characterClass.name === "Mage" && player.mana > 0) content += " [M]agic";
-      content += " [S]ave [Q]uit";
+      const combatContent = [
+        `A ${enemy.name} appears!`,
+        meta?.description ? meta.description : "",
+        meta?.ability ? `Ability: ${meta.ability}` : "",
+        "",
+        "[A]ttack [D]odge [P]otion" +
+          (player.characterClass.name === "Mage" && player.mana > 0
+            ? " [M]agic"
+            : "") +
+          " [H]elp [S]ave [Q]uit",
+      ]
+        .filter(Boolean)
+        .join("\n");
 
       const runCombat = async (): Promise<boolean> => {
         const statusMsgs = player.applyStatusEffects();
         statusMsgs.forEach((m) => appendLog(layout, m));
         if (player.hp <= 0) return false;
 
-        setMainContent(layout, content);
-        setStats(layout, formatStatus(player, currentLevel, roomsExplored, difficulty.roomsPerLevel, difficulty));
+        setMainContent(layout, combatContent);
+        setStats(
+          layout,
+          formatStatus(
+            player,
+            currentLevel,
+            roomsExplored,
+            difficulty.roomsPerLevel,
+            difficulty
+          ),
+          formatEnemyStats(enemy)
+        );
         layout.screen.render();
 
-        const key = await waitForKey(screen, ["a", "d", "p", "m", "h", "s", "q", "escape"]);
+        const key = await waitForKey(screen, [
+          "a",
+          "d",
+          "p",
+          "m",
+          "h",
+          "s",
+          "q",
+          "escape",
+        ]);
         if (key === "q" || key === "escape") return false;
         if (key === "s") return false;
 
+        if (key === "h") {
+          const helpContent = [
+            "COMBAT HELP",
+            "",
+            "[A] Attack - Deal damage",
+            "[D] Dodge - Avoid enemy attack",
+            "[P] Potion - Restore 5 HP",
+            "[M] Magic - Mage: ignore defense",
+            "[S] Save to slot",
+            "[Q] Quit combat",
+          ].join("\n");
+          setMainContent(layout, helpContent);
+          layout.screen.render();
+          await waitForKey(screen, ["escape", "enter", " "]);
+          return runCombat();
+        }
+
         if (key === "a") {
           const result = player.attack(enemy);
-          appendLog(layout, result.isCritical ? `CRITICAL! ${result.damage} damage` : `You hit for ${result.damage}`);
+          appendLog(
+            layout,
+            result.isCritical
+              ? `CRITICAL! ${result.damage} damage`
+              : `You hit for ${result.damage}`
+          );
+          setStats(
+            layout,
+            formatStatus(
+              player,
+              currentLevel,
+              roomsExplored,
+              difficulty.roomsPerLevel,
+              difficulty
+            ),
+            formatEnemyStats(enemy)
+          );
           if (enemy.hp <= 0) {
             player.score += Math.floor(Math.random() * 5) + 5;
             appendLog(layout, `Defeated ${enemy.name}! +score`);
@@ -361,11 +432,38 @@ export async function runDungeon(
         } else if (key === "p") {
           if (player.heal()) appendLog(layout, "Potion: +5 HP");
           else appendLog(layout, "No potions!");
-        } else if (key === "m" && player.characterClass.name === "Mage" && player.mana > 0) {
-          const dmg = player.characterClass.magicPower + Math.floor(Math.random() * 2);
+          setStats(
+            layout,
+            formatStatus(
+              player,
+              currentLevel,
+              roomsExplored,
+              difficulty.roomsPerLevel,
+              difficulty
+            ),
+            formatEnemyStats(enemy)
+          );
+        } else if (
+          key === "m" &&
+          player.characterClass.name === "Mage" &&
+          player.mana > 0
+        ) {
+          const dmg =
+            player.characterClass.magicPower + Math.floor(Math.random() * 2);
           enemy.hp -= dmg;
           player.mana--;
           appendLog(layout, `Magic Missile: ${dmg} damage`);
+          setStats(
+            layout,
+            formatStatus(
+              player,
+              currentLevel,
+              roomsExplored,
+              difficulty.roomsPerLevel,
+              difficulty
+            ),
+            formatEnemyStats(enemy)
+          );
           if (enemy.hp <= 0) {
             player.score += Math.floor(Math.random() * 5) + 5;
             appendLog(layout, `Defeated ${enemy.name}!`);
@@ -374,12 +472,25 @@ export async function runDungeon(
         }
 
         const er = enemy.attack(player);
-        appendLog(layout, `${enemy.name} hits for ${er.damage}${er.blocked ? " (blocked)" : ""}`);
+        appendLog(
+          layout,
+          `${enemy.name} hits for ${er.damage}${er.blocked ? " (blocked)" : ""}`
+        );
         if (player.hp <= 0) {
           outcomeRef.value = "defeat";
           return false;
         }
-        setStats(layout, formatStatus(player, currentLevel, roomsExplored, difficulty.roomsPerLevel, difficulty));
+        setStats(
+          layout,
+          formatStatus(
+            player,
+            currentLevel,
+            roomsExplored,
+            difficulty.roomsPerLevel,
+            difficulty
+          ),
+          formatEnemyStats(enemy)
+        );
         return runCombat();
       };
 

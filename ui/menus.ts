@@ -5,9 +5,13 @@ import {
   type SaveMetadata,
 } from "../saves/saveManager";
 
-// ANSI: 6=cyan, 8=gray
-const BORDER_STYLE: { type: "line"; fg: number } = { type: "line", fg: 6 };
-const BORDER_GREY: { type: "line"; fg: number } = { type: "line", fg: 8 };
+// ANSI: 2=green, 3=yellow, 4=blue, 5=magenta, 6=cyan, 8=grey
+const BORDER_CYAN = { type: "line" as const, fg: 6 };
+const BORDER_MAGENTA = { type: "line" as const, fg: 5 };
+const BORDER_GREEN = { type: "line" as const, fg: 2 };
+const BORDER_YELLOW = { type: "line" as const, fg: 3 };
+const BORDER_BLUE = { type: "line" as const, fg: 4 };
+const BORDER_GREY = { type: "line" as const, fg: 8 };
 
 const TITLE_ART = `
    __  __ _       _   ____                        
@@ -18,22 +22,30 @@ const TITLE_ART = `
                                      |_|           
 `;
 
-export type MainMenuChoice = "new" | "load" | "scores" | "quit" | null;
+export type MainMenuChoice = "new" | "load" | "continue" | "openworld" | "scores" | "quit" | null;
 
-export function showMainMenu(screen: BlessedScreen): Promise<MainMenuChoice> {
+export function showMainMenu(
+  screen: BlessedScreen,
+  hasAutosave: boolean
+): Promise<MainMenuChoice> {
   return new Promise((resolve) => {
+    const menuItems = ["New Game", "Load Game"];
+    if (hasAutosave) menuItems.push("Continue");
+    menuItems.push("Open World", "High Scores", "Quit");
+
     const container = blessed.box({
       parent: screen,
       top: "center",
       left: "center",
-      width: 50,
+      width: 52,
       height: "shrink",
       tags: true,
       padding: { left: 2, right: 2, top: 1, bottom: 2 },
+      label: " {bold}MAIN MENU{/} ",
       style: {
         fg: "white",
-        border: BORDER_STYLE,
-        focus: { border: { fg: "yellow" } },
+        bg: "black",
+        border: BORDER_CYAN,
       },
     });
 
@@ -53,23 +65,24 @@ export function showMainMenu(screen: BlessedScreen): Promise<MainMenuChoice> {
       top: 10,
       left: 2,
       width: "100%-4",
-      height: 8,
+      height: Math.max(6, menuItems.length + 2),
       keys: true,
       vi: true,
       mouse: true,
-      items: ["New Game", "Load Game", "High Scores", "Quit"],
+      items: menuItems,
       style: {
         fg: "white",
         selected: { fg: "black", bg: "cyan" },
         item: { fg: "white" },
-        border: { fg: "black" },
       },
-      border: BORDER_GREY,
+      border: { type: "line" as const, fg: 6 },
     });
 
     list.on("select", (_, index) => {
-      const choices: MainMenuChoice[] = ["new", "load", "scores", "quit"];
-      resolve(choices[index] ?? null);
+      const baseChoices: MainMenuChoice[] = ["new", "load"];
+      if (hasAutosave) baseChoices.push("continue");
+      baseChoices.push("openworld", "scores", "quit");
+      resolve(baseChoices[index] ?? null);
       container.destroy();
       screen.render();
     });
@@ -88,14 +101,15 @@ export function showDifficultyMenu(screen: BlessedScreen): Promise<DifficultyCho
       parent: screen,
       top: "center",
       left: "center",
-      width: 60,
+      width: 62,
       height: "shrink",
       tags: true,
       padding: { left: 2, right: 2, top: 1, bottom: 2 },
-      label: " Select Difficulty ",
+      label: " {bold}SELECT DIFFICULTY{/} ",
       style: {
         fg: "white",
-        border: BORDER_STYLE,
+        bg: "black",
+        border: BORDER_GREEN,
       },
     });
 
@@ -118,7 +132,7 @@ export function showDifficultyMenu(screen: BlessedScreen): Promise<DifficultyCho
         fg: "white",
         selected: { fg: "black", bg: "green" },
       },
-      border: BORDER_GREY,
+      border: { type: "line" as const, fg: 2 },
     });
 
     list.on("select", (_, index) => {
@@ -142,14 +156,15 @@ export function showClassMenu(screen: BlessedScreen): Promise<ClassChoice> {
       parent: screen,
       top: "center",
       left: "center",
-      width: 58,
+      width: 60,
       height: "shrink",
       tags: true,
       padding: { left: 2, right: 2, top: 1, bottom: 2 },
-      label: " Choose Your Class ",
+      label: " {bold}CHOOSE CLASS{/} ",
       style: {
         fg: "white",
-        border: BORDER_STYLE,
+        bg: "black",
+        border: BORDER_YELLOW,
       },
     });
 
@@ -171,7 +186,7 @@ export function showClassMenu(screen: BlessedScreen): Promise<ClassChoice> {
         fg: "white",
         selected: { fg: "black", bg: "yellow" },
       },
-      border: BORDER_GREY,
+      border: { type: "line" as const, fg: 3 },
     });
 
     list.on("select", (_, index) => {
@@ -207,14 +222,15 @@ export function showLoadMenu(screen: BlessedScreen): Promise<1 | 2 | 3 | null> {
       parent: screen,
       top: "center",
       left: "center",
-      width: 72,
+      width: 74,
       height: "shrink",
       tags: true,
       padding: { left: 2, right: 2, top: 1, bottom: 2 },
-      label: " Load Game ",
+      label: " {bold}LOAD GAME{/} ",
       style: {
         fg: "white",
-        border: BORDER_STYLE,
+        bg: "black",
+        border: BORDER_MAGENTA,
       },
     });
 
@@ -230,9 +246,9 @@ export function showLoadMenu(screen: BlessedScreen): Promise<1 | 2 | 3 | null> {
       items,
       style: {
         fg: "white",
-        selected: { fg: "black", bg: "green" },
+        selected: { fg: "black", bg: "magenta" },
       },
-      border: BORDER_GREY,
+      border: { type: "line" as const, fg: 5 },
     });
 
     list.on("select", (_, index) => {
@@ -270,14 +286,15 @@ export function showSaveMenu(
       parent: screen,
       top: "center",
       left: "center",
-      width: 72,
+      width: 74,
       height: "shrink",
       tags: true,
       padding: { left: 2, right: 2, top: 1, bottom: 2 },
-      label: " Save Game ",
+      label: " {bold}SAVE GAME{/} ",
       style: {
         fg: "white",
-        border: BORDER_STYLE,
+        bg: "black",
+        border: BORDER_MAGENTA,
       },
     });
 
@@ -304,9 +321,9 @@ export function showSaveMenu(
       items,
       style: {
         fg: "white",
-        selected: { fg: "black", bg: "cyan" },
+        selected: { fg: "black", bg: "magenta" },
       },
-      border: BORDER_GREY,
+      border: { type: "line" as const, fg: 5 },
     });
 
     list.on("select", (_, index) => {
@@ -357,15 +374,16 @@ export function showHighScores(screen: BlessedScreen): Promise<void> {
       parent: screen,
       top: "center",
       left: "center",
-      width: 50,
+      width: 52,
       height: "shrink",
       tags: true,
       padding: { left: 2, right: 2, top: 1, bottom: 2 },
-      label: " High Scores ",
+      label: " {bold}HIGH SCORES{/} ",
       content,
       style: {
         fg: "white",
-        border: BORDER_STYLE,
+        bg: "black",
+        border: BORDER_BLUE,
       },
     });
 

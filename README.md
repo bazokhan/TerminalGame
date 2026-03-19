@@ -8,7 +8,7 @@ A text-based roguelike adventure game played in the terminal. Built with TypeScr
 
 Full-screen terminal UI with:
 
-- **Main menu:** New Game, Load Game, High Scores, Quit
+- **Main menu:** New Game, Load Game, Continue (if autosave), **Open World**, High Scores, Quit
 - **Save system:** 3 manual slots + auto-checkpoint after each room
 - **Cutscenes:** Intro (ASCII art + typewriter), level transitions, victory, defeat
 - **Difficulty:** Easy, Normal, Hard, Quick Play (~5–8 min)
@@ -21,9 +21,9 @@ Full-screen terminal UI with:
 
 The original readline-based dungeon crawler.
 
-### Open World (`npm run open-world`)
+### Open World (`npm start` → Open World, or `npm run open-world`)
 
-Grid-based ASCII world with free movement:
+Grid-based ASCII world with free movement. Access from the main menu or run directly:
 
 - Combat on random encounters (10% per move)
 - Gold and EXP rewards on victory
@@ -50,9 +50,14 @@ Grid-based ASCII world with free movement:
 - **Combat:** `A` Attack, `D` Dodge, `P` Potion, `M` Magic (Mage), `S` Save, `Q` Quit
 - **Cutscenes:** `Space` to skip
 
-### Map Legend (Open World)
+### Open World Controls
 
-`@` Player · `T` Town · `D` Dungeon · `M` Merchant · `.` Grass · `~` Water · `♣` Forest · `^` Mountains · `#` Walls
+- **Move:** `W`/`A`/`S`/`D` or arrow keys
+- **Legend:** `L` — Map symbols
+- **Help:** `H` — Commands
+- **Inventory:** `I` · **Potion:** `P` · **Save:** `S` · **Quit:** `Q`
+
+**Map legend:** `@` Player · `T` Town · `D` Dungeon · `M` Merchant · `.` Grass · `~` Water · `♣` Forest · `^` Mountains · `#` Walls
 
 ## Project Structure
 
@@ -67,8 +72,22 @@ Grid-based ASCII world with free movement:
 └── ui/              # Blessed UI (screen, layout, menus, cutscene, prompt)
 ```
 
+## ASCII Art & Animations
+
+Skills that can help with ASCII graphics, logos, and terminal animations:
+
+| Skill | Purpose |
+|-------|---------|
+| **ascii-terminal-animation-pack** | Matrix rain, waves, terminal demos |
+| **ascii-art-diagram-creator** | ASCII diagrams |
+| **ascii-cli-logo-banner** | CLI logos and banners |
+| **ascii-image-to-ascii** | Convert images to ASCII |
+
+Install: `npx skills add partme-ai/full-stack-skills@ascii-terminal-animation-pack`
+
 ## Planned
 
 - Combat animations (flash on hit)
+- Richer ASCII sprites and shooting mechanics
 
 Enjoy your adventure!
