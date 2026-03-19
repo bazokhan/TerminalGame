@@ -2,3 +2,6 @@
 /dist
 high_scores.json
 game_save.json
+world_save.json
+saves/*.json
+.cursor/

@@ -4,7 +4,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "ts-node index.ts"
+    "start": "ts-node game.ts",
+    "dungeon": "ts-node index.ts",
+    "open-world": "ts-node openWorld.ts"
   },
   "keywords": [],
   "author": "",
@@ -14,5 +16,9 @@
     "@types/node": "^22.13.13",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2"
+  },
+  "dependencies": {
+    "@types/blessed": "^0.1.27",
+    "blessed": "^0.1.81"
   }
 }
